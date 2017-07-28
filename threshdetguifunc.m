@@ -10,14 +10,23 @@ function threshdetguifunc(~,~,job,varargin)
 %
 
 % -------------------------------------------------------------------------
-% Version 5.4, Dec 2016
-% (C) Harald Hentschke (University of Tübingen)
+% Version 5.4, July 2017
+% (C) Harald Hentschke (University Hospital of Tübingen)
 % -------------------------------------------------------------------------
 
 % to do:
 % - at one point, do a serious cleanup: rename variables, delegate the
 % various jobs to functions, maybe rethink the concept of using global
 % variables
+% - 'events' (read spikes) were originally believed to be sufficiently
+% represented by tsl only; however, in the meantime we have sweep indices
+% (evt.sweepIx) and also amplitudes (evt.amp) which may characterize them.
+% Instead of having these parameters as separate fields of evt it would be
+% much cleaner to have an etsl for events, too, and use this to hold all
+% relevant information on the events. The downside, however, is that in
+% the case of extracellularly recorded spikes, for which threshdetui was
+% originally conceived, we'd be wasting memory. Maybe having additional
+% fields of evt isn't such a bad idea after all?
 % - multiple-threshold detection (+alignment) to capture 'emerging' units
 % of different polarity
 % - plotBurst (equivalent of plotEvt for bursts)
@@ -235,7 +244,7 @@ while jobsToDo
       wp.dataChanName={''};
       wp.si=nan;
       % base line parameters
-      wp.baselinePar=[nan nan nan];
+      wp.baselinePar=[nan nan];
       % x coordinate of last mouse click in excerpt window
       wp.curPtX=0;
       % current status of manual burst markup
@@ -568,7 +577,7 @@ while jobsToDo
       wp.manualDeletedSilentPerIx=[];
       wp.transIA=zeros(0,1);
       wp.transAI=zeros(0,1);
-      wp.baselinePar=[nan nan nan];
+      wp.baselinePar=[nan nan];
       % delete all lines & markers & set handles to nan
       if any(ishandle(sp.rawOv.burstLh))
         delete(sp.rawOv.burstLh);
@@ -652,7 +661,7 @@ while jobsToDo
         ds.dataPath=tmpDataPath;
         % retrieve information about file
         if strcmpi('.abf',ds.dataFn(end-3:end))
-          [nix,nix2,ds.fileInfo]=abfload([ds.dataPath ds.dataFn],'info');
+          [~,~,ds.fileInfo]=abfload([ds.dataPath ds.dataFn],'info');
         elseif strcmpi('.mat',ds.dataFn(end-3:end))
           load([ds.dataPath ds.dataFn],'fi');
           ds.fileInfo=fi;
@@ -781,7 +790,7 @@ while jobsToDo
       subplot(sp.rawOv.axH), cla, hold on
       if ~isempty(d)
         % unconditioned data...
-        [nada,nada2,nada3,ph]=pllplot(d(:,1),'si',wp.si,'noscb',1);
+        [~,~,~,ph]=pllplot(d(:,1),'si',wp.si,'noscb',1);
         tmpNShift=1;
         % data in first column (unconditioned trace) possibly in other color
         if wp.precondFlag
@@ -906,14 +915,31 @@ while jobsToDo
           end
           % vii. re-concatenate, order: downsampled raw, full precond,
           % partly precond
-          d=cat(2,tmpD,d(:,2),d(:,1));
-          % viii. now compute base line noise characteristics: nonparametric
-          % version of sd (note: it is assumed that base line
-          % characteristics don't change appreciably from sweep to sweep)
-          wp.baselinePar=prctile(d(:,2),[15.87 50 84.13]);
+          d=cat(2,tmpD,d(:,[2 1]));
           % don't forget to recompute length of raw data excerpt in points
           wp.excLen_pts=cont2discrete(wp.excLen,wp.si/1000,'intv',1);
           wp.rawNRow=size(d,1);
+          % viii. compute base line characteristics, poor man's version:
+          % divide data into short segments of 200 ms and compute noise of
+          % each; in histogram of these pick maximum 
+          excPts=cont2discrete(200,wp.si/1000,'intv',1);
+          % note tmpD being re-used
+          tmpD=d(1:end-rem(wp.rawNRow,excPts),2);
+          tmpD=reshape(tmpD,excPts,size(tmpD,1)/excPts);
+          [~,v]=detbaseline(tmpD,'meth','median');
+          % the simple assumption here is that intervals with the lowest
+          % noise level correspond to periods in which there is little
+          % neuronal activity, so these are the baseline ones we are
+          % looking for
+          % - identify segments in bin with maximal count
+          [n,~,binIx]=histcounts(v,'BinMethod','fd');
+          [~,ix]=max(n);
+          % - select these segments
+          tmpD=tmpD(:,binIx==ix);
+          % from these, compute median, iqr/2
+          [m,v]=detbaseline(tmpD(:),'meth','median');
+          wp.baselinePar=[m v];
+          clear tmpD
         else
           h=warndlg('current data have already been preconditioned');
           uiwait(h);
@@ -1156,12 +1182,66 @@ while jobsToDo
         % call detPSCAmp - evtCutout must have been produced from partly
         % preconditioned data (see error checking above)
         evt.amp=detPSCAmp(evtCutout{1},tmpCutout,wp.evtTsl{1},1-tmpwinEvtCutout(1),...
-          'd',d(:,3),'si',wp.si,'fh',tmpFh,'nPlotEv',wp.maxNPlotCutout);
+          'd',d(:,3),'si',wp.si,'fh',tmpFh,'nPlotEv',min(1000,numel(wp.evtTsl{1})));
         % convert to cell 
         evt.amp={evt.amp};
       end
       job(1)=[];
 
+    case 'experimental'
+      
+      warndlg('experimental procedures inactive');
+      return
+
+      tmpFh=findobj('Tag','ExpAnPlot','type','figure');
+      if isempty(tmpFh)
+        tmpFh=mkfig([],'b');
+        set(tmpFh,'Tag','ExpAnPlot','name','Experimental Analysis Plot');
+      else
+        figure(tmpFh);
+        clf
+      end
+      
+      anCol=2;
+      % range of thresholds to test
+      p=prctile(d(:,anCol),[70 99.9]);
+      nThresh=20;
+      threshArr=flipud(linspace(p(1),p(2),nThresh)');
+
+      resArr=nan(nThresh,2);
+      waitBarH = waitbar(0,'Computing...');
+      disp('computing...')
+      for k=1:nThresh
+          waitbar(k/nThresh,waitBarH);
+          tmpEtsl=tbt(d(:,anCol),...
+            'idx',threshArr(k),...
+            'minActive',0,'minInactive',100,...
+            'elimOrder','inactive');
+          activeIx=etsl2logical(wp.rawNRow,tmpEtsl);
+%         activeIx=d(:,anCol)>=threshArr(k);
+%         % post-ts 
+%         for ii=1:50
+%           activeIx=activeIx | circshift(activeIx,1);
+%         end
+%         % pre-ts 
+%         for ii=1:50
+%           activeIx=activeIx | circshift(activeIx,-1);
+%         end
+      end
+      delete(waitBarH);
+      if diff(nanmean(resArr))>3
+        yyaxis left
+        plot(threshArr,resArr(:,1),'o-');
+        ylabel('all')
+        yyaxis right
+        plot(threshArr,resArr(:,2),'o-');
+        ylabel('inactive')
+      else
+        plot(threshArr,resArr,'o-');
+      end
+      
+      job(1)=[];
+      
     case 'plotEvt'
       figure(findobj('Tag','threshdetgui','type','figure'));
         if any(ishandle(sp.rawOv.evMarkH))
@@ -1310,7 +1390,7 @@ while jobsToDo
           % eliminate gaps between active periods and THEN get rid of too
           % short active events, because otherwise detecting bursts of
           % high-frequency events would be difficult
-          [bu.etsl,bu.silentEtsl,nada,wp.transIA,wp.transAI]=tbt(d(:,tmpCol),...
+          [bu.etsl,bu.silentEtsl,~,wp.transIA,wp.transAI]=tbt(d(:,tmpCol),...
             wp.si/1000,ap.thresh*[1; ap.threshFract],...
             'minActive',ap.minEventWidth,'minInactive',ap.maxBurstGapWidth,...
             'elimOrder','inactive','threshLag',ap.threshLag);
@@ -1408,7 +1488,7 @@ while jobsToDo
         tmpBuIx=unique(ceil((1:tmpv1)/tmpv1*nTs));
         time=discrete2cont(1:500/(wp.si/1000),wp.si/1000,'intv',0)+ap.winBuCutout(1);
         maxNPt=numel(time);
-        tmpBu=repmat(nan,maxNPt,numel(tmpBuIx));
+        tmpBu=nan(maxNPt,numel(tmpBuIx));
         for ix=1:numel(tmpBuIx)
           nPt=numel(buCutout{tmpBuIx(ix)});
           nPt=min(maxNPt,nPt);
