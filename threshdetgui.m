@@ -5,12 +5,13 @@ function threshdetgui
 % simple threshold method.
 
 % -------------------------------------------------------------------------
-% Version 5.4, July 2017
+% Version 5.5, xxxx 2017
 % (C) Harald Hentschke (University Hospital of Tübingen)
 % -------------------------------------------------------------------------
 
-% Here, layout of all gui elements (knobs, buttons, etc.) should be done
+global sp wp
 
+% Here, layout of all gui elements (knobs, buttons, etc.) should be done
 labelscale('fontSz',8,'scaleFac',1.0,'lineW',.25,'markSz',6); 
 % standard dimension of edit fields
 editw=.08;
@@ -123,7 +124,7 @@ uicontrol('Parent',H0, ...
   'Fontweight','bold',...
   'style','pushbutton',...
   'String','event amp', ...
-  'TooltipString','automatic computation of event amplitude (pseudodiff''ed data only)',...
+  'TooltipString','computation of PSC amplitudes',...
   'Tag','evtAmpBttn', ...
   'callback', {funcH1,{'detEvtAmp'}});  
 
@@ -223,6 +224,11 @@ set(sp.cutout.axH,'tag','cutouts');
 sp.iei.axH=subplot('position',[la3  3*smarg  0.5-la2-smarg  0.5-5*smarg]);
 set(sp.iei.axH,'tag','iei');
 
+% field .isBatchMode has to be set before calling threshdetguifunc because
+% in deployed mode one of the first code lines in threshdetguifunc requires
+% its existence despite the short-circuit &&
+wp.isBatchMode=false;
 
-threshdetguifunc(H0,[],{'init','openOptionsDialog'},'sp',sp);
+% threshdetguifunc(H0,[],{'init','openOptionsDialog'},'sp',sp);
+threshdetguifunc(H0,[],{'init','openOptionsDialog'});
 

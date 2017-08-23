@@ -10,7 +10,7 @@ function threshdetguifunc(~,~,job,varargin)
 %
 
 % -------------------------------------------------------------------------
-% Version 5.4, July 2017
+% Version 5.5, xxxx 2017
 % (C) Harald Hentschke (University Hospital of Tübingen)
 % -------------------------------------------------------------------------
 
@@ -82,6 +82,7 @@ while jobsToDo
       buCutout=[];
       evt.tsl=[];
       evt.amp=[];
+      evt.tRise=[];
       bu.etsl=zeros(0,etslc.nCol);
       bu.silentEtsl=zeros(0,etslc.nCol);
       % --------------------------
@@ -132,8 +133,10 @@ while jobsToDo
       ap.doUncondCutout=false;
       
       % ~~~~~~~ event detection section
-      % threshold for detection of events
+      % detection threshold (absolute, that is, in magnitude units)
       ap.thresh=nan;
+      % detection threshold (relative, that is, relative to noise level)
+      ap.relativeThresh=nan;
       % fraction of threshold; determines burst ends 
       ap.threshFract=1;
       % dead time
@@ -153,13 +156,17 @@ while jobsToDo
 
       % --------------------------------------
       % ----- set up wp ('working' parameters)
-      % --------------------------------------      
+      % --------------------------------------
       % ~~~~~~~ display options & matlab version section
-      % which version of matlab?
+      % which version of Matlab?
       wp.mver=ver;
-      wp.mver=str2double(wp.mver(strmatch('matlab',lower({wp.mver.Name}),'exact')).Version);
+      % note that in standalone deployed code function ver may produce
+      % several entries with .Name equal to 'Matlab', so we have to opt for
+      % one
+      tmpIx=find(strcmpi('matlab',{wp.mver.Name}),1);
+      wp.mver=str2double(wp.mver(tmpIx).Version);
       % which version of threshdetgui?
-      wp.ver=5.4;
+      wp.ver=5.5;
       % length (ms) of raw data excerpt displayed in second subplot from top
       wp.excLen=1000;
       % same in pts
@@ -205,6 +212,13 @@ while jobsToDo
       % handles to main window and its children
       wp.mainFigureHandle=findobj('Tag','threshdetgui','type','figure');
       wp.mainGuiHandles=guihandles(wp.mainFigureHandle);
+      % directory for parameter files
+      if isdeployed
+        % in deployed mode, set to a fail-safe location
+        wp.pfDir='c:';
+      else
+        wp.pfDir=strrep(mfilename('fullpath'),['private' filesep mfilename],'parameterFiles');
+      end
       % flag determining whether batch mode is on
       wp.isBatchMode=false;
       % list of files to be processed in batch mode
@@ -423,35 +437,21 @@ while jobsToDo
       % the whole figure including the uicontrols will be saved (and loaded
       % by 'readOptionsFromFile'). This is certainly less than elegant, but 
       % it is relatively fail-safe
-
-      % by default dump files in \threshdet\parms
-      pfDir=mfilename('fullpath');
-      pfDir=pfDir(1:max(strfind(pfDir,'\'))-1);
-      w=what;
-      cd([pfDir '\parms']);
-      [tmpDataFn,tmpDataPath] = uiputfile('*.fig');
+      [tmpDataFn,tmpDataPath] = uiputfile([wp.pfDir filesep '*.fig']);
       if ischar(tmpDataFn) && ischar(tmpDataPath) 
         saveas(findobj('tag','options'),[tmpDataPath tmpDataFn ],'fig');
       end
-      % cd back to original dir
-      cd(w.path);
-      clear w pfDir
       job(1)=[];
       
     case 'readOptionsFromFile'
-      % by default look for files in \threshdet\parms
-      pfDir=mfilename('fullpath');
-      pfDir=pfDir(1:max(strfind(pfDir,'\'))-1);
-      w=what;
-      cd([pfDir '\parms']);
-      [tmpOptFn,tmpOptPath] = uigetfile('*.fig','pick options file');
+      % look for files in default dir
+      [tmpOptFn,tmpOptPath] = uigetfile([wp.pfDir filesep '*.fig'],'pick options file');
       if ischar(tmpOptFn) && ischar(tmpOptPath)
         close(findobj('tag','options'));
         open([tmpOptPath tmpOptFn]);
+        % set wp.pfDir
+        wp.pfDir=tmpOptPath;
       end
-      % cd back to original dir
-      cd(w.path);
-      clear w pfDir
       job(1)=[];
 
     case 'digestOptions'
@@ -494,16 +494,6 @@ while jobsToDo
           ap.sampFac=1;
         end
       end
-      % --- pseudodifferentiation: can only be checked if sampling interval is
-      % known (=data loaded)
-      if ~isempty(d)
-        if all(isfinite(ap.pseudoDiffWin))
-          if ap.pseudoDiffWin(1)<(wp.si/1000)
-            warndlg('pseudo-diff window length is too short - data will not be pseudo-diff''d');
-            ap.pseudoDiffWin=nan;
-          end
-        end
-      end
       % --- filter parameters: can only be checked if sampling interval is
       % known (=data loaded)
       if ~isempty(d)
@@ -518,6 +508,9 @@ while jobsToDo
       % --- threshold section      
       if ap.threshFract<=0 || ap.threshFract>1
         warndlg('threshold fraction must be between 0 and 1');
+      end
+      if ap.relativeThresh<2 && ap.relativeThresh>-2
+        warndlg('a relative threshold value in [-2 2] usually does not make sense');
       end
       % --- event detection
       if length(ap.winEvtCutout)~=2
@@ -569,6 +562,7 @@ while jobsToDo
       % empty tsl
       evt.tsl=[];
       evt.amp=[];
+      evt.tRise=[];
       bu.etsl=zeros(0,etslc.nCol);
       bu.silentEtsl=zeros(0,etslc.nCol);
       wp.evtTsl=[];
@@ -889,37 +883,23 @@ while jobsToDo
           if isfinite(ap.hiCFreq)
             d(:,2,:)=hifi(d(:,2,:),wp.si,ap.hiCFreq,'rs',wp.hiRs);
           end
-          % v. pseudodiff
-          if all(isfinite(ap.pseudoDiffWin))
-            % convert from ms to pts
-            pseudoDiffWinPts=floor(ap.pseudoDiffWin(1)/(wp.si/1000));
-            if numel(ap.pseudoDiffWin)>1
-              % convert user-defined deltaT from ms to pts
-              deltaTPts=round(ap.pseudoDiffWin(2)/(wp.si/1000));
-            else
-              % deltaT is equal to win length
-              deltaTPts=pseudoDiffWinPts;
-            end
-            disp(['pseudo-diff window length in points:' int2str(pseudoDiffWinPts) '; delta t in points: ' int2str(deltaTPts)]);
-            d(:,2,:)=pseudodiff(d(:,2,:),'win',ones(1,pseudoDiffWinPts)/pseudoDiffWinPts,'deltaT',deltaTPts);
-          end
-          % vi. custom command
+          % v. custom command
           try
             eval(ap.customCommand);
-          catch
-            errordlg(['custom command failed. Here''s the error message: ' lasterr]);
+          catch MExc
+            errordlg(['custom command failed. Here''s the error message: ' MExc.message]);
           end
           % if this is episodic data reshape back 
           if ~isnan(wp.rawNEpisode) && wp.rawNEpisode>1
             d=reshape(permute(d,[1 3 2]),[wp.rawNEpisodePt*wp.rawNEpisode 2]);
           end
-          % vii. re-concatenate, order: downsampled raw, full precond,
+          % vi. re-concatenate, order: downsampled raw, full precond,
           % partly precond
           d=cat(2,tmpD,d(:,[2 1]));
           % don't forget to recompute length of raw data excerpt in points
           wp.excLen_pts=cont2discrete(wp.excLen,wp.si/1000,'intv',1);
           wp.rawNRow=size(d,1);
-          % viii. compute base line characteristics, poor man's version:
+          % vii. compute base line characteristics, poor man's version:
           % divide data into short segments of 200 ms and compute noise of
           % each; in histogram of these pick maximum 
           excPts=cont2discrete(200,wp.si/1000,'intv',1);
@@ -939,6 +919,10 @@ while jobsToDo
           % from these, compute median, iqr/2
           [m,v]=detbaseline(tmpD(:),'meth','median');
           wp.baselinePar=[m v];
+          % viii. set relative threshold
+          if ~isempty(ap.relativeThresh) && isfinite(ap.relativeThresh)
+            ap.thresh=wp.baselinePar(1)+wp.baselinePar(2)*ap.relativeThresh;
+          end
           clear tmpD
         else
           h=warndlg('current data have already been preconditioned');
@@ -955,6 +939,7 @@ while jobsToDo
       % tsl must be emptied because it may exist from former session
       evt.tsl=[];
       evt.amp=[];
+      evt.tRise=[];
       wp.evtTsl=[];
       evtCutout=[];
       if any(ishandle(sp.rawOv.evMarkH))
@@ -1039,6 +1024,7 @@ while jobsToDo
             evt.tsl(killIx)=[];
             if ~isempty(evt.amp)
               evt.amp(killIx)=[];            
+              evt.tRise(killIx)=[];            
             end
             evtCutout(killIx)=[];
             wp.evtTsl(killIx)=[];
@@ -1082,6 +1068,7 @@ while jobsToDo
           tmptsl=evt.tsl{1};
           if ~isempty(evt.amp)
             tmpAmp=evt.amp{1};
+            tmpTRise=evt.tRise;            
           end
           tmpCutouts=evtCutout{1};
           allTsIx=1:numel(tmptsl);
@@ -1095,12 +1082,14 @@ while jobsToDo
               evtCutout{ui}=tmpCutouts(:,helperIx);
               if ~isempty(evt.amp)
                 evt.amp{ui}=tmpAmp(helperIx);
+                evt.tRise{ui}=tmpTRise(helperIx);
               end
             else
               evt.tsl{ui}=tmptsl(pop(ui).ix);
               evtCutout{ui}=tmpCutouts(:,pop(ui).ix);
               if ~isempty(evt.amp)
                 evt.amp{ui}=tmpAmp(pop(ui).ix);
+                evt.tRise{ui}=tmpTRise(pop(ui).ix);
               end
             end
           end
@@ -1117,6 +1106,7 @@ while jobsToDo
             evtCutout(emptyIx)=[];
             if ~isempty(evt.amp)
               evt.amp(emptyIx)=[];
+              evt.tRise(emptyIx)=[];
             end
             warndlg(['unit separation resulted in ' int2str(numel(emptyIx)) ' empty time stamp lists (which were deleted)']);
           end
@@ -1181,10 +1171,12 @@ while jobsToDo
         tmpCutout=tsl2exc(d(:,detEvCol),'idx',wp.evtTsl,'win',tmpwinEvtCutout);
         % call detPSCAmp - evtCutout must have been produced from partly
         % preconditioned data (see error checking above)
-        evt.amp=detPSCAmp(evtCutout{1},tmpCutout,wp.evtTsl{1},1-tmpwinEvtCutout(1),...
-          'd',d(:,3),'si',wp.si,'fh',tmpFh,'nPlotEv',min(1000,numel(wp.evtTsl{1})));
+        [evt.amp,evt.tRise]=detPSCAmp(evtCutout{1},tmpCutout,1-tmpwinEvtCutout(1),...
+          ap.thresh,wp.si,wp.evtTsl{1},'d',d(:,3),'fh',tmpFh,...
+          'nPlotEv',min(1000,numel(wp.evtTsl{1})),'plotOverview',true);
         % convert to cell 
         evt.amp={evt.amp};
+        evt.tRise={evt.tRise};
       end
       job(1)=[];
 
@@ -1561,6 +1553,7 @@ while jobsToDo
         % if field .amp is empty, get rid of it
         if isempty(evt.amp)
           evt=rmfield(evt,'amp');
+          evt=rmfield(evt,'tRise');
         end
         tmpResFn=[];
         if length(evt.tsl)>1
