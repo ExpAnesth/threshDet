@@ -5,8 +5,8 @@ function threshdetgui
 % simple threshold method.
 
 % -------------------------------------------------------------------------
-% Version 5.5, xxxx 2017
-% (C) Harald Hentschke (University Hospital of Tübingen)
+% Version 5.6, September 2017
+% (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
 global sp wp

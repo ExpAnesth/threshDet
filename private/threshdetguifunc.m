@@ -10,8 +10,8 @@ function threshdetguifunc(~,~,job,varargin)
 %
 
 % -------------------------------------------------------------------------
-% Version 5.5, xxxx 2017
-% (C) Harald Hentschke (University Hospital of Tübingen)
+% Version 5.6, September 2017
+% (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
 % to do:
@@ -115,7 +115,7 @@ while jobsToDo
 
       % ~~~~~~~ preconditioning section
       % artifact elimination
-      ap.afElimination=[nan nan nan];
+      ap.afElimination={};
       % lowpass filter freq
       ap.loCFreq=nan;
       % highpass filter freq
@@ -362,7 +362,7 @@ while jobsToDo
             case 'edit'
               % depending on the type of the field...
               switch uicFn{g}
-                case {'customCommand','resFnString','notesString'}
+                case {'customCommand','resFnString','notesString','afElimination'}
                   eval(['set(handles.' uicFn{g} ',''string'',' structName{structIx} '.' uicFn{g} ');']);
                 case {'thresh'}
                   % threshold must be written back with comparatively high
@@ -407,7 +407,7 @@ while jobsToDo
             case 'edit'
               % depending on the type of the field...
               switch uicFn{g}
-                case {'customCommand','resFnString','notesString'}
+                case {'customCommand','resFnString','notesString','afElimination'}
                   eval([structName{structIx} '.' uicFn{g} '=get(handles.' uicFn{g} ',''string'');']);
                 otherwise
                   eval(['[tmpNum,conversionOK]=str2num(get(handles.' uicFn{g} ',''string''));']);
@@ -459,38 +459,26 @@ while jobsToDo
       % and ii) data were loaded
       disp('** processing & checking options..');
       % ----- checks of parameters:
-      % --- artifact elimination
-      if all(isfinite(ap.afElimination))
-        % order of parameters:
-        % thresh,extent_substitution,extent_estimation
-        if numel(ap.afElimination)==3
-          if ~isequal(int16(ap.afElimination(2)),ap.afElimination(2)) || ap.afElimination(2)<0
-            warndlg('artifact elimination: the second value (extension of artifact deletion interval) must be specified in terms of sampling points, that is, an integer >0 - canceling artifact elimination');
-            ap.afElimination=[nan nan nan];
+      % --- artifact elimination: check for syntax, all other checks will
+      % be performed in function elim_artifact
+      if ~isempty(ap.afElimination)
+        try
+          tmp=eval(ap.afElimination);
+          if ~iscell(tmp)
+            warndlg('input in field ''artifact elimination'' must evaluate to a cell array - not eliminating artifacts');
+            ap.afElimination={};
           end
-          if ~isequal(int16(ap.afElimination(3)),ap.afElimination(3)) || ap.afElimination(3)<0
-            warndlg('artifact elimination: the third value (number of points flanking artifact on either side from which base line will be computed) must be specified in terms of sampling points, that is, an integer >0 - canceling artifact elimination');
-            ap.afElimination=[nan nan nan];
-          end
-          if ap.afElimination(3)<=ap.afElimination(2)
-            warndlg('artifact elimination: the third value must be larger than the second value - canceling artifact elimination');
-            ap.afElimination=[nan nan nan];
-          end
-          if ap.afElimination(1)<=0
-            warndlg('artifact elimination: thresh must be a positive value - canceling artifact elimination');
-            ap.afElimination=[nan nan nan];
-          end
-        else
-          warndlg('three values are needed for automatic artifact elimination (threshold, extent in sampling points, substitute value)');
-          ap.afElimination=[nan nan nan];
+        catch
+          warndlg('faulty syntax in field ''artifact eliminiation'': must evaluate to a cell array - not eliminating artifacts');
+          ap.afElimination={};
         end
       end
       % --- downsampling factor
       if ~isfinite(ap.sampFac)
         ap.sampFac=1;
       else
-        if ~isequal(int16(ap.sampFac),ap.sampFac) || ap.sampFac<1
-          warndlg('downsampling factor is zero, negative or not an integer - data will not be downsampled');
+        if ap.sampFac<=0
+          warndlg('downsampling factor is zero or negative - data will not be downsampled');
           ap.sampFac=1;
         end
       end
@@ -842,39 +830,26 @@ while jobsToDo
             % reshape into 3D
             d=reshape(d,[wp.rawNEpisodePt 1 wp.rawNEpisode]);
           end
-          % i. artifact elimination
-          if all(isfinite(ap.afElimination))
-            for g=1:size(d,3)
-              % detect artifacts as 'bursts': a critical parameter is the
-              % time interval below which two threshold-surpassing portions
-              % of data (=signal excursions of a biphasic artifact) will be
-              % merged and treated as one. For now, assume that the signal
-              % excursions of an artifact are separated by 1 ms at most
-              afEtsl=tbt(abs(d(:,1,g)),'idx',ap.afElimination(1),...
-                'minActive',0,'minInactive',round(1000/wp.si),...
-                'elimOrder','inactive');
-              % substitution of values: 
-              d(:,1,g)=etslexcsubst(d(:,1,g),'idx',afEtsl,...
-                ap.afElimination(2)*[-1 1],ap.afElimination(3)*[-1 1]);
-            end
-          end
-          % ii.a lowpass filter
-          if isfinite(ap.loCFreq)
-            for g=1:size(d,3)
-              d(:,1,g)=lofi(d(:,1,g),wp.si,ap.loCFreq);
-            end
-          end
-          % ii.b downsampling (don't forget tmpD)
-          if isfinite(ap.sampFac) && ap.sampFac>1
-            disp('** downsampling..');
-            d=d(1:ap.sampFac:end,:,:);
-            tmpD=tmpD(1:ap.sampFac:end,:,:);
-            wp.si=wp.si*ap.sampFac;
-            wp.rawNEpisodePt=size(d,1);
-          end
-          % iii. removal of line hum
+          % i. removal of line hum (all columns at once via elim_hum)
           if all(isfinite(ap.notchCFreq))
             d(:,1,:)=elim_hum(d(:,1,:),wp.si,ap.notchCFreq);
+          end
+          % ii. artifact elimination
+          if ~isempty(ap.afElimination)
+            tmpInputArg=eval(ap.afElimination);
+            d(:,1,:)=elim_artefact(d(:,1,:),wp.si,tmpInputArg{:});
+          end
+          % iii.a lowpass filter
+          if isfinite(ap.loCFreq)
+            d(:,1,:)=lofi(d(:,1,:),wp.si,ap.loCFreq);
+          end
+          % iii.b resampling (don't forget tmpD)
+          if isfinite(ap.sampFac) && ap.sampFac~=1.0
+            disp('** resampling...');
+            d=resample(d,wp.si,wp.si*ap.sampFac);
+            tmpD=resample(tmpD,wp.si,wp.si*ap.sampFac);
+            wp.si=wp.si*ap.sampFac;
+            wp.rawNEpisodePt=size(d,1);
           end
           % *** replicate d and do all further preconditioning on the
           % second column
@@ -1151,13 +1126,13 @@ while jobsToDo
       end
       if doDetEvtAmp
         % pop up window right away so user knows it's in the make
-        tmpFh=findobj('Tag','evAmpOvPlot','type','figure');
+        tmpFh=findobj('Tag','evAmpFigure','type','figure');
         if isempty(tmpFh)
           tmpFh=figure('Units','normalized', ...
             'Name','EvAmplitude Plot', ...
             'NumberTitle','off', ...
             'Position',[0.005 0.33 0.99 0.35], ...
-            'Tag','evAmpOvPlot'...
+            'Tag','evAmpFigure'...
             );
         else
           figure(tmpFh);
