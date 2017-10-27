@@ -1,4 +1,4 @@
-function [amp,tRise]=detPSCAmp(dExc,ddExc,tZeroIx,thresh,si,tsl,varargin)
+function [amp,tRise,varargout]=detPSCAmp(dExc,ddExc,tZeroIx,thresh,si,tsl,varargin)
 % ** function [amp,tRise]=detPSCAmp(dExc,ddExc,tZeroIx,thresh,si,tsl,varargin)
 % estimates amplitudes and rise times of phasic postsynaptic currents
 % (PSCs) from/of their rise phase. The input arguments to detPSCAmp must
@@ -61,8 +61,9 @@ function [amp,tRise]=detPSCAmp(dExc,ddExc,tZeroIx,thresh,si,tsl,varargin)
 % NAME           TYPE/DEFAULT           DESCRIPTION
 % amp            vector                 estimated PSC amplitudes (original
 %                                        unit)
-% tRise          vector                 estimated *linear* PSC rise time
-%                                        (ms)
+% tRise          vector                 estimated PSC rise time (ms)
+% varargout{1}   vector                 estimated PSC base amplitudes
+% varargout{2}   vector                 estimated PSC peak amplitudes
 
 
 % TO DO:
@@ -237,11 +238,10 @@ if sum(identBaseIx)
 end
 delIx=identPeakAndBaseIx | identPeakIx | identBaseIx;
 
-% now use these indexes to compute base line and peak
+% use these indexes to compute base line and peak...
 baseVal=dExc(sub2ind([n1,n2],baseIx,(1:n2)'));
 peakVal=dExc(sub2ind([n1,n2],peakIx,(1:n2)'));
-
-% but now set indexes and values of all events deemed bad to nan
+% but then set indexes and values of all events deemed bad to nan
 baseIx(delIx)=nan;
 baseVal(delIx)=nan;
 peakIx(delIx)=nan;
@@ -265,6 +265,13 @@ end
 if badCount>0
   warning(['rise time of ' int2str(badCount) ' events could not be determined'])
 end
+if nargout>=3
+  varargout{1}=baseVal;
+end
+if nargout>=4
+  varargout{2}=peakVal;
+end
+
 
 % -----------------------------------------------------------------------------
 %                          III. PLOTS

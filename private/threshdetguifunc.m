@@ -10,7 +10,7 @@ function threshdetguifunc(~,~,job,varargin)
 %
 
 % -------------------------------------------------------------------------
-% Version 5.6, September 2017
+% Version 5.7, October 2017
 % (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
@@ -137,6 +137,8 @@ while jobsToDo
       ap.thresh=nan;
       % detection threshold (relative, that is, relative to noise level)
       ap.relativeThresh=nan;
+      % event detection method (see tcd)
+      ap.evtDetMode='cross';
       % fraction of threshold; determines burst ends 
       ap.threshFract=1;
       % dead time
@@ -948,7 +950,7 @@ while jobsToDo
           detEvCol=1;
         end
         % time stamps in ticks
-        evt.tsl=tcd(d(:,detEvCol),'idx',ap.thresh);
+        evt.tsl=tcd(d(:,detEvCol),'idx',ap.thresh,'detMode',ap.evtDetMode);
         delete(th);
         % kill all spx following predecessor by less than dead time
         if isfinite(ap.evDeadT) && ~isempty(evt.tsl{1})
@@ -1146,12 +1148,13 @@ while jobsToDo
         tmpCutout=tsl2exc(d(:,detEvCol),'idx',wp.evtTsl,'win',tmpwinEvtCutout);
         % call detPSCAmp - evtCutout must have been produced from partly
         % preconditioned data (see error checking above)
-        [evt.amp,evt.tRise]=detPSCAmp(evtCutout{1},tmpCutout,1-tmpwinEvtCutout(1),...
+        [evt.amp,evt.tRise,tmpBase]=detPSCAmp(evtCutout{1},tmpCutout,1-tmpwinEvtCutout(1),...
           ap.thresh,wp.si,wp.evtTsl{1},'d',d(:,3),'fh',tmpFh,...
           'nPlotEv',min(1000,numel(wp.evtTsl{1})),'plotOverview',true);
         % convert to cell 
         evt.amp={evt.amp};
         evt.tRise={evt.tRise};
+        % evt.base={tmpBase};
       end
       job(1)=[];
 
