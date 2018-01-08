@@ -10,7 +10,7 @@ function threshdetguifunc(~,~,job,varargin)
 %
 
 % -------------------------------------------------------------------------
-% Version 5.7, October 2017
+% Version 5.8, January 2018
 % (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
@@ -115,17 +115,17 @@ while jobsToDo
 
       % ~~~~~~~ preconditioning section
       % artifact elimination
-      ap.afElimination={};
+      ap.afElimination=[];
       % lowpass filter freq
       ap.loCFreq=nan;
       % highpass filter freq
       ap.hiCFreq=nan;
       % notch center freq
       ap.notchCFreq=nan;
+      % settings for differentiator filter
+      ap.differfi=[];
       % downsampling factor
       ap.sampFac=nan;
-      % window length (ms) and deltaT (ms) for pseudo-differentiation
-      ap.pseudoDiffWin=nan;
       % custom command
       ap.customCommand='why';
       % the question whether cutouts shall be produced from partially
@@ -364,7 +364,7 @@ while jobsToDo
             case 'edit'
               % depending on the type of the field...
               switch uicFn{g}
-                case {'customCommand','resFnString','notesString','afElimination'}
+                case {'customCommand','resFnString','notesString','afElimination','differfi','evtDetMode'}
                   eval(['set(handles.' uicFn{g} ',''string'',' structName{structIx} '.' uicFn{g} ');']);
                 case {'thresh'}
                   % threshold must be written back with comparatively high
@@ -409,8 +409,15 @@ while jobsToDo
             case 'edit'
               % depending on the type of the field...
               switch uicFn{g}
-                case {'customCommand','resFnString','notesString','afElimination'}
-                  eval([structName{structIx} '.' uicFn{g} '=get(handles.' uicFn{g} ',''string'');']);
+                case {'customCommand','resFnString','notesString','afElimination','differfi','evtDetMode'}
+                  % §§for unknown reasons differfi returns a cell, so catch
+                  % that
+                  tmpString=get(handles.(uicFn{g}),'string');
+                  if iscell(tmpString)
+                    tmpString=tmpString{1};
+                  end
+                  eval([structName{structIx} '.' uicFn{g} '=tmpString;']);
+                  % eval([structName{structIx} '.' uicFn{g} '=get(handles.' uicFn{g} ',''string'');']);
                 otherwise
                   eval(['[tmpNum,conversionOK]=str2num(get(handles.' uicFn{g} ',''string''));']);
                   if conversionOK
@@ -473,6 +480,20 @@ while jobsToDo
         catch
           warndlg('faulty syntax in field ''artifact eliminiation'': must evaluate to a cell array - not eliminating artifacts');
           ap.afElimination={};
+        end
+      end
+      % --- differentiator filter: check for syntax, all other checks will
+      % be performed in function differfi
+      if ~isempty(ap.differfi)
+        try
+          tmp=eval(ap.differfi);
+          if ~iscell(tmp)
+            warndlg('input in field ''differentiator filter'' must evaluate to a cell array - not filtering');
+            ap.differfi={};
+          end
+        catch
+          warndlg('faulty syntax in field ''differentiator filter'': must evaluate to a cell array - not filtering');
+          ap.differfi={};
         end
       end
       % --- downsampling factor
@@ -860,7 +881,12 @@ while jobsToDo
           if isfinite(ap.hiCFreq)
             d(:,2,:)=hifi(d(:,2,:),wp.si,ap.hiCFreq,'rs',wp.hiRs);
           end
-          % v. custom command
+          % v. differentiator filter
+          if ~isempty(ap.differfi)
+            tmpInputArg=eval(ap.differfi);
+            d(:,2,:)=differfi(d(:,2,:),wp.si,tmpInputArg{:});
+          end
+          % vi. custom command
           try
             eval(ap.customCommand);
           catch MExc
@@ -1149,7 +1175,7 @@ while jobsToDo
         % call detPSCAmp - evtCutout must have been produced from partly
         % preconditioned data (see error checking above)
         [evt.amp,evt.tRise,tmpBase]=detPSCAmp(evtCutout{1},tmpCutout,1-tmpwinEvtCutout(1),...
-          ap.thresh,wp.si,wp.evtTsl{1},'d',d(:,3),'fh',tmpFh,...
+          wp.si,wp.evtTsl{1},'d',d(:,3),'thresh',ap.thresh,'fh',tmpFh,...
           'nPlotEv',min(1000,numel(wp.evtTsl{1})),'plotOverview',true);
         % convert to cell 
         evt.amp={evt.amp};
