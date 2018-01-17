@@ -10,7 +10,7 @@ function threshdetguifunc(~,~,job,varargin)
 %
 
 % -------------------------------------------------------------------------
-% Version 5.8, January 2018
+% Version 5.9, January 2018
 % (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
@@ -92,9 +92,6 @@ while jobsToDo
       % hit, so use these as initializing values
       ds.dataFn=0;
       ds.dataPath='e:\_data\otc_ctx\';
-      % § in future version set handle to loading func depending on file
-      % type
-      ds.dataLoadFH=@abfload;
       % will contain a number of file-specific parameters after upload
       ds.fileInfo=[];
       
@@ -646,7 +643,7 @@ while jobsToDo
         wp.batchFileList(1)=[];
       else
         % regular mode: ui interface for file selection
-        [tmpDataFn,tmpDataPath] = uigetfile('*.abf','pick data file',ds.dataPath,'MultiSelect','on');
+        [tmpDataFn,tmpDataPath] = uigetfile({'*.abf';'*.h5';'*.mat'},'pick data file',ds.dataPath,'MultiSelect','on');
         if iscell(tmpDataFn)
           % multiple files were selected for batch detection: set flag 
           wp.isBatchMode=true;
@@ -665,11 +662,20 @@ while jobsToDo
         ds.dataFn=tmpDataFn;
         ds.dataPath=tmpDataPath;
         % retrieve information about file
-        if strcmpi('.abf',ds.dataFn(end-3:end))
-          [~,~,ds.fileInfo]=abfload([ds.dataPath ds.dataFn],'info');
-        elseif strcmpi('.mat',ds.dataFn(end-3:end))
-          load([ds.dataPath ds.dataFn],'fi');
-          ds.fileInfo=fi;
+        [~,~,dataFileExt]=fileparts(ds.dataFn);
+        switch dataFileExt
+          case '.abf'
+            [~,~,ds.fileInfo]=abfload([ds.dataPath ds.dataFn],'info');
+          case '.mat'
+            load([ds.dataPath ds.dataFn],'fi');
+            ds.fileInfo=fi;
+          case '.h5'
+            [~,~,ds.fileInfo]=read_mcdhdf5([ds.dataPath ds.dataFn],'info');
+          otherwise
+            % this case should not be reached because of the filter in
+            % uigetfile
+            errordlg('illegal data file type')
+            return
         end
         % keep previously chosen channel (if any) as default selection for
         % subsequent files
@@ -707,10 +713,13 @@ while jobsToDo
         % length of raw data excerpt in points
         wp.excLen_pts=cont2discrete(wp.excLen,wp.si/1000,'intv',1);
         % load data
-        if strcmpi('.abf',ds.dataFn(end-3:end))
-          d=abfload([ds.dataPath ds.dataFn],'channels',wp.dataChanName);
-        elseif strcmpi('.mat',ds.dataFn(end-3:end))
-          d=matDload([ds.dataPath ds.dataFn],'channels',wp.dataChanName);
+        switch dataFileExt
+          case '.abf'
+            d=abfload([ds.dataPath ds.dataFn],'channels',wp.dataChanName);
+          case '.mat'
+            d=matDload([ds.dataPath ds.dataFn],'channels',wp.dataChanName);
+          case '.h5'
+            d=read_mcdhdf5([ds.dataPath ds.dataFn],'channels',wp.dataChanName);
         end
         % first thing to do: scale data
         if wp.scaleFac~=1

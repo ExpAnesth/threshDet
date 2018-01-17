@@ -5,7 +5,7 @@ function threshdetgui
 % simple threshold method.
 
 % -------------------------------------------------------------------------
-% Version 5.8, January 2018
+% Version 5.9, January 2018
 % (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
