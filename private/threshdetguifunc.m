@@ -454,7 +454,7 @@ while jobsToDo
       [tmpOptFn,tmpOptPath] = uigetfile([wp.pfDir filesep '*.fig'],'pick options file');
       if ischar(tmpOptFn) && ischar(tmpOptPath)
         close(findobj('tag','options'));
-        open([tmpOptPath tmpOptFn]);
+        openfig([tmpOptPath tmpOptFn]);
         % set wp.pfDir
         wp.pfDir=tmpOptPath;
       end
@@ -1273,11 +1273,12 @@ while jobsToDo
       else
         % helper vars for plotting markers of spx
         nTs=0;
+        sp.cutout.axH.XTickMode='auto';
+        sp.cutout.axH.YTickMode='auto';
         % ** watch out: for multi-sweep data we cannot use
         % ds.fileInfo.recTime to know the x extent of the overview plot
         % window because the sweeps were concatenated without gaps even if
         % in real time there were gaps **
-        % tmpFac=diff(get(sp.rawOv.axH,'xlim'))/diff(ds.fileInfo.recTime);
         tmpFac=diff(get(sp.rawOv.axH,'xlim'))/(wp.rawNRow/1e6*wp.si);
         tmpyl=get(sp.rawOv.axH,'ylim');
         for ui=1:length(evt.tsl)
