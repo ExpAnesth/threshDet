@@ -7,17 +7,15 @@ function threshdetguifunc(~,~,job,varargin)
 % job              cell array of char    jobs to accomplish
 % sp               struct                handles to subplots of main
 %                                         figure
-%
 
 % -------------------------------------------------------------------------
-% Version 5.9, January 2018
+% Version 5.10, October 2018
 % (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
 % to do:
 % - at one point, do a serious cleanup: rename variables, delegate the
-% various jobs to functions, maybe rethink the concept of using global
-% variables
+% various jobs to functions, rethink the concept of using global variables
 % - 'events' (read spikes) were originally believed to be sufficiently
 % represented by tsl only; however, in the meantime we have sweep indices
 % (evt.sweepIx) and also amplitudes (evt.amp) which may characterize them.

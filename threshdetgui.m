@@ -1,11 +1,11 @@
 function threshdetgui
 % ** function threshdetgui
-% Graphical user interface for detection of neuronal 'events' (e.g. action
-% potentials) and 'bursts' (e.g. up states) in time series data via a
-% simple threshold method.
+% Graphical user interface for the detection of neuronal 'events' (e.g.
+% action potentials) and 'bursts' (e.g. Up States) in time series data via
+% threshold methods.
 
 % -------------------------------------------------------------------------
-% Version 5.9, January 2018
+% Version 5.10, October 2018
 % (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
