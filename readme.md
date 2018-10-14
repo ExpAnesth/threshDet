@@ -2,7 +2,7 @@
 
 is a graphical user interface for the detection of neuronal signals in time series. Signals to be detected can be either events of fixed duration (e.g. action potentials) or bursts (of variable duration, e.g. Up States). The code makes use of in-house formats for time information, namely 'time stamp lists' (tsl) and 'extended time stamp lists' (etsl). 
 
-![screenshot](/doc/screenshot.png)
+![screenshot](/doc/screenshot_threshDet.png)
 
 ### Features: 
 * reading of files in diverse formats (presently, Axon Binary Format (abf), HDF5 as resulting from conversion of MultiChannelSystems (*.mcd) files, custom Matlab format)
@@ -23,7 +23,9 @@ Please note that the code in this repository is not self-sufficient, you'll addi
 
 
 ## General note on repositories in the ExpAnesth organization
-Except where noted, code was written by Harald Hentschke, Section of Experimental Anesthesiology, Department of Anesthesiology, University Hospital of Tuebingen. It has been designed primarily for in-house use by individuals who were instructed on its purpose and limitations. Also, a substantial proportion of the code has been developed over a time span of >10 years. Therefore,
+The code in these repositories provides basic tools for the analysis of electrophysiological time series to members of the Section of Experimental Anesthesiology, Department of Anesthesiology, University Hospital of Tuebingen. Except where noted, code was written by Harald Hentschke. It has been designed primarily for in-house use by individuals who were instructed on its purpose and limitations. Also, a substantial proportion of the code has been developed and extended over a time span of >10 years. In detail,
 
-* documentation is anywhere from non-existent to incomplete
-* due to its gradual development over years, design and implementation do not necessarily reflect best programming practice and techniques. For example, in terms of design, many code files are quite large and had better be broken down into smaller units. In terms of techniques, e.g. the new automatic array expansion as introduced in Matlab Release 2016b features only rarely. The code will be improved and updated when and where the need arises.
+* all code has been tested to run on Matlab R2018b
+* the implementation of algorithms reflects the evolution of Matlab itself, that is, code that had been developed on older versions of Matlab does not necessarily feature newer techniques such as the new automatic array expansion as introduced in Matlab Release 2016b
+* while most m-files contain ample comments, more extensive documentation exists only for a few repositories
+* the code will be improved, updated and documented when and where the need arises

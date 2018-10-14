@@ -163,7 +163,7 @@ while jobsToDo
       tmpIx=find(strcmpi('matlab',{wp.mver.Name}),1);
       wp.mver=str2double(wp.mver(tmpIx).Version);
       % which version of threshdetgui?
-      wp.ver=5.5;
+      wp.ver=5.10;
       % length (ms) of raw data excerpt displayed in second subplot from top
       wp.excLen=1000;
       % same in pts
