@@ -9,7 +9,7 @@ function threshdetguifunc(~,~,job,varargin)
 %                                         figure
 
 % -------------------------------------------------------------------------
-% Version 5.10, October 2018
+% Version 5.10.1, November 2018
 % (C) Harald Hentschke (University Hospital of Tuebingen)
 % -------------------------------------------------------------------------
 
@@ -786,13 +786,14 @@ while jobsToDo
       for bIx=1:numel(wp.batchHideOHFNames)
         set(wp.mainGuiHandles.(wp.batchHideOHFNames{bIx}),'enable','on');
       end
-      disp('event numbers:');
+      disp('event rates (Hz):');
+      % ** note flipud
+      disp(flipud(wp.batchEvRate));
+      wp.batchEvRate=[];
+      disp('event counts:');
       % ** note flipud
       disp(flipud(wp.batchEvNumber));
       wp.batchEvNumber=[];
-      disp('event rates (Hz):');
-      disp(flipud(wp.batchEvRate));
-      wp.batchEvRate=[];
 
       disp('*** batch job done');
       job=cell(1,0);
