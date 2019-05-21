@@ -44,19 +44,11 @@ if ~isempty(d)
   % store ix as field in wp
   wp.excXLim_pts=ix;
   subplot(sp.rawExc.axH);
-  % add offset to original data such that preconditioned and original data
-  % can be seen together with little offset
-  av=mean(d(ix(1):ix(2),:));
-  if numel(av)>1
-    av=[av(1)-av(2) 0];
-  else
-    av=[av 0];
-  end
   % 'plot' excerpt (instead of plotting excerpt data in real experimental
   % time plot vs index and change axis labels to experimental time in s
   % further down)
   for g=1:min(2,size(d,2))
-    set(sp.rawExc.excH(g),'xdata',1:diff(ix)+1,'ydata',d(ix(1):ix(2),g)-av(g));
+    set(sp.rawExc.excH(g),'xdata',1:diff(ix)+1,'ydata',d(ix(1):ix(2),g));
   end
   mima=[min(min(d(ix(1):ix(2),:))) max(max(d(ix(1):ix(2),:)))];
   tmpxl=[1 diff(ix)+1];
